@@ -12,3 +12,4 @@ description = "Rusty Elm Compiler"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+pest = "2.7.10"

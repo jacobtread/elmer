@@ -1,0 +1,118 @@
+whitespace2 = _{ WHITESPACE | NEWLINE }
+end = _{NEWLINE | EOI}
+
+WHITESPACE   =  _{ " " | "\t"  }
+COMMENT = { ("{-" ~ (!"-}" ~ ANY)* ~ "-}") | "--" ~  (!end ~ ANY)* ~ end}
+
+
+// The main entry point
+elm = { SOI ~ (module ~ top_level*)* ~ EOI }
+
+// Module definition
+module = { "module" ~ module_name ~ "exposing" ~ expose_list ~ NEWLINE }
+
+// Module name (an identifier)
+module_name = { identifier ~ ("." ~ identifier)* }
+
+indentation = _{ (" " | "\t")+ }
+
+// Identifier
+identifier = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
+
+// TODO: All operators
+operator = {  ("+" | "-"| "/" | "*" | "=" | "." | "<" | ">" | ":" | "&" | "|" | "^" | "?" | "%" | "!" | "#" | "$" | "@" | "~" | "\\")+ }
+comma = _{ "," }
+pipe = _{ "|" }
+
+// Expose all
+all = _{ "(" ~ ".." ~ ")" }
+
+// Module expose list
+expose_list = { expose_list_all | expose_list_entries }
+expose_list_all = { all }
+expose_list_entries = { "(" ~ expose_entry ~ ((comma ~ expose_entry)*) ~ ")" }
+
+
+// Module expose list entries
+expose_entry = {  expose_entry_operator | expose_entry_all | expose_entry_types | identifier }
+expose_entry_operator = { "(" ~ operator+ ~ ")" }
+expose_entry_all = { identifier ~ all }
+expose_entry_types = { identifier ~ "(" ~ identifier ~ (comma ~ identifier) ~ ")" }
+
+// Module import list
+import = { "import" ~ module_name ~ ( "as" ~ identifier )? ~ ( "exposing" ~ expose_list )? ~ NEWLINE }
+
+// TODO: Types, type aliases, functions
+top_level = { import | type_def | type_alias | port | function_type_def | function | NEWLINE }
+
+// TODO: DocString, infix fn
+
+type = { (functionless_type ~ "->")* ~ functionless_type}
+
+functionless_type = { (identifier ~ (enclosed_type+)) | enclosed_type }
+
+enclosed_type = { enclosed_type_record_empty | enclosed_type_record | enclosed_type_tuple | enclosed_type_braced | enclosed_type_unit | identifier}
+enclosed_type_record_empty = { "{" ~ "}" }
+enclosed_type_record = { "{" ~ (identifier ~ ":" ~ type ~ (comma ~ identifier ~ ":" ~ type)*) ~ "}" }
+enclosed_type_tuple = { "(" ~ type ~ (comma ~ type)+ ~ ")" }
+enclosed_type_braced = { "(" ~ type ~ ")" }
+enclosed_type_unit = { "(" ~ ")" }
+
+type_def = { "type" ~ identifier ~ (type_var*) ~ whitespace2* ~ ("=" ~ type_variant) ~ (pipe ~ type_variant)* }
+type_var = { identifier }
+
+// Type variants (for union types)
+type_variant = { identifier ~ enclosed_type* ~ end }
+
+// Type alias
+type_alias = { "type" ~ "alias" ~ identifier ~ type ~ end }
+
+// Port
+port = { "port" ~ identifier ~ ":" ~ type ~ end }
+
+// Function type def
+function_type_def = { identifier ~ ":" ~ type ~ end }
+function = { identifier ~ (enclosed_pattern*) ~ "=" ~ whitespace2? ~ expression ~ end}
+
+pattern = { (identifier ~ (enclosed_pattern)+) | enclosed_pattern | (enclosed_pattern ~ "::")+ ~ enclosed_pattern }
+
+enclosed_pattern = { enclosed_pattern_record | enclosed_pattern_alias | enclosed_pattern_tuple | enclosed_pattern_braced  | enclosed_pattern_unit | identifier | literal | enclosed_pattern_ignored | enclosed_pattern_empty_list | enclosed_pattern_list}
+enclosed_pattern_record = { "{" ~ identifier ~ (comma ~ identifier)* ~ "}"}
+enclosed_pattern_alias = { "(" ~ pattern ~ "as" ~ identifier ~ ")"}
+enclosed_pattern_tuple = { "(" ~ pattern ~ (comma ~ pattern)+ ~ ")"}
+enclosed_pattern_braced = { "(" ~ pattern ~ ")"}
+enclosed_pattern_unit = { "(" ~ ")"}
+enclosed_pattern_ignored = { "_"}
+enclosed_pattern_empty_list = { "[" ~ "]" }
+enclosed_pattern_list = { "[" ~ pattern ~ (comma ~ pattern)* ~ "]" }
+
+// Literals
+literal = { number | string | char | boolean }
+number = @{ (ASCII_NONZERO_DIGIT ~ ASCII_DIGIT+ | ASCII_DIGIT) }
+string = { "\"" ~ (!"\"" ~ ANY)* ~ "\"" }
+char = { "'" ~ (!"'" ~ ANY)* ~ "'" }
+boolean = { "True" | "False" }
+
+expression = { ((application_expression ~ operator)+ ~ whitespace2? ~ open_expression) | open_expression}
+
+closed_expression = { closed_expression_record_assignment | closed_expression_empty_record | closed_expression_empty_list | closed_expression_list | closed_expression_tuple | closed_expression_braced | literal | closed_expression_unit | closed_expression_operator | identifier }
+closed_expression_record_assignment = { "{" ~ (identifier ~ "|") ~ identifier ~ "=" ~ expression ~ (comma ~ identifier ~ "=" ~ expression)* ~ "}"}
+closed_expression_empty_record = { "{" ~ "}"}
+closed_expression_empty_list = { "[" ~ "]"}
+closed_expression_list = { "[" ~ expression ~ (comma ~ expression)* ~ "]"}
+closed_expression_tuple = { "(" ~ expression ~ (comma ~ expression)+ ~ ")"}
+closed_expression_braced = { "(" ~ expression ~ ")"}
+closed_expression_unit = { "(" ~ ")"}
+closed_expression_operator = { "(" ~ operator ~ ")"}
+
+application_expression = { closed_expression+ }
+
+open_expression = { open_expression_case | open_expression_anon_function | open_expression_if | open_expression_let | application_expression }
+open_expression_case = { "case" ~ expression ~ "of" ~ whitespace2? ~ case_branch ~ (/* IDENT */ case_branch)*}
+open_expression_anon_function = { "\\" ~ enclosed_pattern + ~ "->" ~ whitespace2? ~ expression }
+open_expression_if = { "if" ~ expression ~ "then" ~ end ~ expression ~ "else" ~ end ~ expression}
+open_expression_let = {"let" ~ declr ~ (/* INDENT */ declr)* ~ end  ~ "in" ~ whitespace2* ~ expression}
+
+declr = { ((identifier ~ type)? ~ identifier ~ (enclosed_pattern)+ ~ "=" ~ expression) | (enclosed_pattern ~ "=" ~ expression)}
+
+case_branch = { pattern ~ "->" ~ expression }
